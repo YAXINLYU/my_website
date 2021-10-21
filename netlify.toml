@@ -1,5 +1,5 @@
 [build] 
-  publish = "baseURL = "https://veronicayaxinlyu.netlify.app/""
+  publish = "public"
   command = "hugo"
 
 [build.environment]
@@ -13,4 +13,4 @@
   HUGO_VERSION = "0.83.1"
 
 [context.deploy-preview.environment]
-  HUGO_VERSION = "0.83.1" 
+  HUGO_VERSION = "0.83.1"  
