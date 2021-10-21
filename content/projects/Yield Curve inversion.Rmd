@@ -1,0 +1,136 @@
+
+# Challenge 1: Yield Curve inversion
+
+```{r download_historical_yield_curve, warning=FALSE}
+#Load data
+yield_curve <- read_csv(here::here("data", "yield_curve.csv"))
+```
+
+## Yields on US rates by duration since 1960
+
+```{r yield_curve_1, out.width="100%"}
+#PLotting a graph of rates since 1960 
+yield_curve %>% 
+  ggplot(aes(x=date,y=value,color = duration))+
+  geom_line(size=0.2)+
+  
+#Faceting the graphs by duration
+facet_wrap(~ factor(duration, 
+                        levels = c("3-Month Treasury Bill",
+                                   "6-Month Treasury Bill",
+                                   "1-Year Treasury Rate",
+                                   "2-Year Treasury Rate",
+                                   "3-Year Treasury Rate",
+                                   "5-Year Treasury Rate",
+                                   "7-Year Treasury Rate",
+                                   "10-Year Treasury Rate",
+                                   "20-Year Treasury Rate",
+                                   "30-Year Treasury Rate")), 
+               ncol = 2)+
+  theme_bw()+
+  labs(title="Yiels of U.S Treasury rates since 1960",color="")
+
+```
+
+## Monthly yields on US rates by duration since 1999 on a year-by-year basis
+
+```{r yield_curve_2, out.width="100%"}
+
+yield_curve %>%
+  
+  #Deleting the years previous to 1999
+  filter(year(date)>=1999) %>% 
+  
+  #Plotting US rates by duration since 1999
+  ggplot(aes(x=maturity,y=value,group= date,color=as.factor(year(date) )))+
+  geom_line(size=0.2)+
+  
+  #Faceting by years
+  facet_wrap(~year(date), ncol=4)+
+  
+  #Reordering the x axis
+  scale_x_discrete(limits=c('3m','6m','1y','2y','3y','5y','7y','10y','20y','30y'))+
+  theme_bw()+
+  theme(legend.position = "none")+
+  labs(title="US Yield Curve",x="Maturity",y="Yield %",caption=NULL)
+ 
+```
+
+
+
+### 3-month and 10-year yields since 1999
+
+```{r yield_curve_3, echo=FALSE, out.width="100%"}
+
+#PLotting the 3m and 10y rates since 1999
+yield_curve %>% 
+  
+  #Selecting the 3m and 10y rates
+  filter(maturity=="3m" | maturity=="10y") %>% 
+  
+  #Deleting years previous 1999
+  filter(year(date)>=1999) %>% 
+  
+  ggplot(aes(x=date,y=value,color=duration),size=0.2)+
+  geom_line()+
+  theme_bw()+
+  labs(title="Yield on 3-month and 10-year US Treasury rates since 1999",x=NULL,y="%",color="")
+```
+
+
+```{r setup_US-recessions, warning=FALSE}
+
+# get US recession dates after 1946 from Wikipedia 
+# https://en.wikipedia.org/wiki/List_of_recessions_in_the_United_States
+
+recessions <- tibble(
+  from = c("1948-11-01", "1953-07-01", "1957-08-01", "1960-04-01", "1969-12-01", "1973-11-01", "1980-01-01","1981-07-01", "1990-07-01", "2001-03-01", "2007-12-01","2020-02-01"),  
+  to = c("1949-10-01", "1954-05-01", "1958-04-01", "1961-02-01", "1970-11-01", "1975-03-01", "1980-07-01", "1982-11-01", "1991-03-01", "2001-11-01", "2009-06-01", "2020-04-30") 
+  )  %>% 
+  mutate(From = ymd(from), 
+         To=ymd(to),
+         duration_days = To-From)
+recessions
+```
+
+```{r setup_US-recessions_1, warning=FALSE}
+
+#Plotting final graph
+
+#Changing the format from long to wide in order to compute the spread and plot it
+yield_wide <- yield_curve %>% 
+  
+  #deleting two columns that prevent the dataframe to be converting into long format
+  select(-series_id) %>% 
+  select(-duration) %>% 
+  
+  #Creating the columns for each maturity and assigning the respective yields 
+  pivot_wider(names_from = "maturity",values_from = "value") %>% 
+  
+  #Computing the spread
+  mutate(spread =`10y`-`3y`)
+
+  #Deleting the receissions  data previous to 1960 
+  recessions <- recessions %>% 
+  filter(year(From)>=1960)
+
+  #Creating the plot
+  ggplot()+
+  #Plotting the spread line
+  geom_line(data=yield_wide,aes(x=date,y=spread),size=0.2)+
+
+  #Plotting the blue and red ribbons
+  geom_ribbon(data=yield_wide,aes(x=date, ymin = 0, ymax = spread, fill = spread > 0),alpha=0.2)+
+  scale_fill_manual(values=c("red","blue"), name="fill")+
+
+  #Plotting the grey shades
+  geom_rect(data = data.frame(x1=recessions$From, x2=recessions$To, y1=-Inf, y2=Inf),aes(xmin=x1,xmax=x2,ymin=y1,ymax=y2),alpha=0.2)+
+  #Deleting legend
+  guides(fill=FALSE)+
+  labs(title="Yield Curve Inversion: 10-year minus 3-month US. Tresury rates", subtitle="Difference in % points, monthly averages. Shaded areas correspond to recession",y="Difference(10 year- 3month) yield in %")+
+  theme_bw()
+
+```
+
+A yield curve flattening means a 10y-3m spread near zero. On the previous graph, we can see that before the two regressions since 1999, the spread contracted to negative values (before the 2001 recession) and near-zero values (before the 2007-2009 recession) though with a steeper fall.The graph seems to corroborate the idea that a flattening curve is a signal for recession. What would be interesting to do is a regression between spread and recession (with lagged variable) to verify causality.
+

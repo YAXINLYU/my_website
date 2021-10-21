@@ -1,0 +1,76 @@
+
+# IMDB ratings: Differences between directors
+
+I would like you to explore whether the mean IMDB rating for Steven Spielberg and Tim Burton are the same or not. I have already calculated the confidence intervals for the mean ratings of these two directors and as you can see they overlap. 
+
+```{r load-movies-data}
+movies <- read_csv(here::here("data", "movies.csv"))
+glimpse(movies)
+```
+
+*Null Hypothesis:* Both Directors (Steven Spielberg & Tim Burton) have same average ratings on IMDB
+*Alternative Hypothesis:* The two directors **do not** have the same average ratings.
+
+```{r nullhypothesis}
+movies_new <- movies %>% 
+  filter(director %in% c("Steven Spielberg","Tim Burton")) 
+
+t.test(rating ~ director, data = movies_new)
+
+imdb_ratings <- movies_new %>%
+  group_by(director) %>% 
+  summarise(mean_rating = mean(rating),
+            count = n(),
+            margin_of_error = qt(0.975, count-1)*sd(rating)/sqrt(count),
+            lower = mean_rating - margin_of_error,
+            upper = mean_rating + margin_of_error)
+```
+
+The p value is 0.01 (less than 0.05), so we can reject the null hypothesis.
+
+```{r fig.align="center",fig.width = 10}
+ggplot(imdb_ratings,aes(x = mean_rating, y = reorder(director, desc(director)), colour = director)) + 
+  geom_point(size = 5) +
+  geom_errorbar(aes(xmin = lower, xmax = upper), width = 0.1, size = 2) +
+  geom_rect(aes(xmin=max(lower), xmax=min(upper), ymin=0, ymax=Inf),
+            color='grey', alpha=0.2) +
+  
+  geom_text(aes(label = round(mean_rating, digits = 2), x = mean_rating),
+            size = 7, colour = "black", nudge_y = 0.15) + 
+  geom_text(aes(label = round(lower, digits = 2), x = lower),
+            size = 5, colour = "black",nudge_y = 0.1) +
+  geom_text(aes(label = round(upper, digits = 2), x = upper),
+            size = 5, colour = "black",nudge_y = 0.1) +
+  
+  labs(title = "Do Spielberg and Burton have the same mean IMDB ratings?",
+       subtitle = "95% confidence intervals overlap" ,
+       x = "Mean IMDB Rating", y = " ") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+The average rating for Steven Spielberg is higher than the average ratings for Tim Burton (at a 95% confidence interval). Thus we can reject the Null Hypothesis.
+
+Using infer package:
+
+```{r}
+obs_diff_movies <- movies_new %>%
+  specify(rating ~ director) %>%
+  calculate(stat = "diff in means", order = c("Steven Spielberg", "Tim Burton"))
+
+null_dist_movies <- movies_new %>%
+  specify(rating ~ director) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  calculate(stat = "diff in means", order = c("Steven Spielberg", "Tim Burton"))
+
+null_dist_movies %>% visualize() +
+  shade_p_value(obs_stat = obs_diff_movies, direction = "two-sided")
+
+null_dist_movies %>%
+  get_p_value(obs_stat = obs_diff_movies, direction = "two_sided")
+```
+
+Based on infer package as well, the p value is 0.02 (less than 0.5), so we can reject null hypothesis.
+To conclude, Steven Spielberg and Tim Burton do not have the same average IMDB Ratings.
+
